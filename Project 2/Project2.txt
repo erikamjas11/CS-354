@@ -1,1 +1,135 @@
 
+module halfAdder (S,C,x,y); 
+   input x,y; 
+   output S,C; 
+   and (C,x,y);
+   xor (S,x,y); 
+    
+endmodule
+
+module fullAdder(x,y,z,C,S); 
+   input x,y,z; 
+   output S,C; 
+   wire S1,D1,D2; 
+
+    halfAdder HA1 (S1,D1,x,y), 
+              HA2 (S,D2,S1,z); 
+    or g1(C,D2,D1); 
+endmodule
+
+module one_bit_ALU(a, b, less, binvert, carry_in, op, carry_out, result);
+	input a, b, less, binvert, carry_in; 
+	input [1:0] op; 
+	output carry_out, result; 
+        wire w0, w1, w2, w3;
+    inverter i1(binvert, b, w0); 
+  	and g0(w1, a, w0); 
+  	or g1(w2, a, w0); 
+  	fullAdder fulladder(a, w0, carry_in, carry_out, w3);
+ 	mux multi(w1, w2, w3, less, op, result);
+endmodule
+
+module one_bit_ALU_set(a, b, less, binvert, carry_in, op, overflow, set, result);
+	input a, b, less, binvert, carry_in; 
+	input [1:0] op; 
+	output set, overflow, result;
+	wire w0, w1, w2, w3;
+
+	inverter i1(binvert, b, w0); 
+  	and g0(w1, a, w0);
+  	or g1(w2, a, w0); 
+	fullAdder fulladder(a, w0, carry_in, w3, set); 
+	mux multi(w1, w2, set, less, op, result); 
+    xor g2(overflow, carry_in, w3); 
+	//xor g2(w4, carry_in, w3); 
+endmodule
+
+
+module mux(i0, i1, i2, i3, select, out);
+
+input[1:0] select;
+input i0, i1, i2, i3;
+output out;
+
+wire q, q1, q2, q3, q4, NOTselect0, NOTselect1;
+wire[1:0]  select;
+wire[3:0]  d;
+
+not n1(NOTselect0, select[0]);
+not n2(NOTselect1, select[1]);
+
+and a1(q1, NOTselect0, NOTselect1, i0);
+and a2(q2, select[0], NOTselect1, i1);
+and a3(q3, NOTselect0, select[1], i2);
+and a4(q4, select[0], select[1], i3);
+
+or o1(out, q1, q2, q3, q4);
+
+endmodule
+
+module inverter(binvert, b0, out);
+    output out;
+    input b0, binvert;
+	wire b1, w0, w1, w2, w3;
+	
+	not (w0, binvert);
+	not (b1,b0);
+	and (w2, binvert, b1);
+	and (w1, w0, b0);
+	or  (out, w1, w2);
+endmodule
+
+module four_bit_ALU(a, b, op, zero, overflow, result);
+	input [3:0] a; 
+	input [3:0] b; 
+	input [2:0] op; 
+	output overflow;
+	output zero;
+	output [3:0] result; 
+	wire w1, w2, w3, w4, w5, set;
+         
+	one_bit_ALU		alu0 (a[0], b[0], set, op[2], op[2], op[1:0], w1, result[0]),
+				alu1(a[1], b[1], set, op[2], w1, op[1:0], w2, result[1]),
+				alu2 (a[2], b[2], set, op[2], w2, op[1:0], w3, result[2]);
+        
+      
+	one_bit_ALU_set	        alu3(a[3], b[3], set, op[2], w3, op[1:0], overflow, set, result[3]);
+	or			g1(w5, result[0], result[1], result[2], result[3]);
+	not			g2(zero, w5); 
+	//and         g3(overflow,w4,op[1]);
+endmodule
+
+
+module testALU;
+   reg signed [3:0] a;
+   reg signed [3:0] b;
+   reg [2:0] op;
+   wire signed [3:0] result;
+   wire zero;
+   wire overflow;
+	
+    four_bit_ALU ALU(a,b,op,zero,overflow,result);
+	
+   initial
+      begin
+        $display("op  a        b        result   zero  overflow");
+	    op = 3'b000; a = 4'b1111; b = 4'b0001;   // AND
+	#10 op = 3'b000; a = 4'b1110; b = 4'b0001;   // AND
+	#10 op = 3'b000; a = 4'b0101; b = 4'b0001;   // AND
+	#10 op = 3'b001; a = 4'b0101; b = 4'b0010;  // OR
+	#10 op = 3'b001; a = 4'b1111; b = 4'b0010;  // OR
+	#10 op = 3'b001; a = 4'b0111; b = 4'b0010;  // OR
+	#10 op = 3'b010; a = 4'b0111; b = 4'b0001;  // ADD
+	#10 op = 3'b010; a = 4'b0111; b = 4'b0001;  // ADD
+	#10 op = 3'b010; a = 4'b1111; b = 4'b0001;  // ADD
+	#10 op = 3'b110; a = 4'b1101; b = 4'b0001;  // SUB
+	#10 op = 3'b110; a = 4'b0111; b = 4'b0001;  // SUB
+	#10 op = 3'b110; a = 4'b1110; b = 4'b0001;  // SUB
+	#10 op = 3'b111; a = 4'b0101; b = 4'b0001;  // SLT
+	#10 op = 3'b111; a = 4'b0110; b = 4'b1111;  // SLT
+	#10 op = 3'b111; a = 4'b1111; b = 4'b1111;  // SLT
+	end
+
+   initial
+    $monitor ("%b %b(%d) %b(%d) %b(%d)  %d      %d  ",op,a,a,b,b,result,result,zero,overflow);
+endmodule
